@@ -19,7 +19,7 @@ jobs:
   validate:
     name: Lint, typecheck & build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Approve native scripts
+        run: npm approve-scripts --allow-scripts-pending
+
       - name: Lint
         run: npm run lint
 
@@ -48,6 +51,9 @@ jobs:
         run: npm run build
         env:
           EXPO_PUBLIC_API_URL: https://api.noufex.com/v1
+
+      - name: Security audit
+        run: npm audit --audit-level=moderate
 
   web-build:
     name: Web PWA bundle
@@ -64,12 +70,32 @@ jobs:
 
       - run: npm ci
 
+      - name: Approve native scripts
+        run: npm approve-scripts --allow-scripts-pending
+
       - name: Build web
         run: npm run build:web
 
       - name: Upload .next
         uses: actions/upload-artifact@v4
         with:
-          name: web-pwa-build
+          name: web-pwa-build-${{ github.run_id }}
           path: ./apps/web-pwa/.next
+          retention-days: 7
+          compression-level: 9
+
+      - name: Upload build report
+        if: always()
+        run: |
+          echo "Build completed at $(date)" >> build-info.txt
+          echo "Node version: $(node --version)" >> build-info.txt
+          echo "npm version: $(npm --version)" >> build-info.txt
+          echo "Build status: ${{ job.status }}" >> build-info.txt
+
+      - name: Upload build info
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-info-${{ github.run_id }}
+          path: build-info.txt
           retention-days: 7
