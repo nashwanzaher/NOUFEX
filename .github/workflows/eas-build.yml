@@ -1,0 +1,61 @@
+name: EAS Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Target platform'
+        required: true
+        type: choice
+        options: [all, ios, android]
+        default: all
+      profile:
+        description: 'EAS Build profile'
+        required: true
+        type: choice
+        options: [development, preview, production]
+        default: preview
+
+concurrency:
+  group: eas-${{ github.ref }}-${{ github.event.inputs.profile || 'preview' }}
+  cancel-in-progress: false
+
+jobs:
+  build-mobile:
+    name: EAS Build (mobile-app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Build packages
+        run: npm run build:packages
+
+      - name: EAS Build
+        working-directory: apps/mobile-app
+        env:
+          EXPO_NO_DOTENV: 1
+        run: |
+          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
+          PROFILE="${{ github.event.inputs.profile || 'preview' }}"
+          eas build \
+            --non-interactive \
+            --platform "$PLATFORM" \
+            --profile "$PROFILE"
